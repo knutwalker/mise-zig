@@ -48,7 +48,7 @@ jqVersionParam='to_entries|map(select((.value | (.[$TARGET]) | (.[$DOWN]) != nul
 list_all_versions() {
 	local zigVersions machVersions
 	zigVersions=$(curl "${curl_opts[@]}" "$ZIG_LIST" | jq -r --arg TARGET "$(get_target)" --arg DOWN "tarball" --arg REPO "Zig" "$jqVersionParam")
-	machVersions=$(curl "${curl_opts[@]}" "$MACH_LIST" | jq -r --arg TARGET "$(get_target)" --arg DOWN "zigTarball" --arg REPO "Mach" "$jqVersionParam")
+	machVersions=$(curl "${curl_opts[@]}" "$MACH_LIST" | jq -r --arg TARGET "$(get_target)" --arg DOWN "tarball" --arg REPO "Mach" "$jqVersionParam")
 	printf "%s\n%s\n" "$zigVersions" "$machVersions" | sort_versions | uniq
 }
 
@@ -60,14 +60,18 @@ list_aliases() {
 	printf "%s\n%s\n" "$zigAliases" "$machAliases"
 }
 
+# shellcheck disable=SC2016 # $VERSION, $TARGET, and $DOWN are arguments passed in from jq
+jqUrlParam='to_entries|map(select(.value.version == $VERSION) | (.value | (.[$TARGET]) | (.[$DOWN])))|.[:1]|.[]'
 get_url() {
-	local version location
+	local version machTarball zigTarball
 	version=$1
-	location="download/$version"
-	if [[ "$version" == *"-dev."* ]]; then
-		location="builds"
+	machTarball=$(curl "${curl_opts[@]}" "$MACH_LIST" | jq -r --arg TARGET "$(get_target)" --arg VERSION "$version" --arg DOWN "tarball" "$jqUrlParam")
+	if [ -n "$machTarball" ]; then
+		printf "%s\n" "$machTarball"
+	else
+		zigTarball=$(curl "${curl_opts[@]}" "$ZIG_LIST" | jq -r --arg TARGET "$(get_target)" --arg VERSION "$version" --arg DOWN "tarball" "$jqUrlParam")
+		printf "%s\n" "$zigTarball"
 	fi
-	printf "https://ziglang.org/%s/zig-%s-%s-%s.tar.xz\n" "$location" "$(get_os)" "$(get_arch)" "$version"
 }
 
 download_release() {
@@ -104,3 +108,4 @@ install_version() {
 		fail "An error occurred while installing $TOOL_NAME $version."
 	)
 }
+
